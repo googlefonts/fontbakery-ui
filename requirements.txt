@@ -1,0 +1,4 @@
+py2app
+fontbakery
+PyQt5
+PyQtWebEngine
