@@ -56,6 +56,7 @@ class DragDropArea(QLabel):
         self.setStyleSheet("background-color: green ")
         paths = [url.toLocalFile() for url in event.mimeData().urls()]
         self.parent.run_fontbakery(paths)
+        event.accept()
 
 
 class ResultsDialog(QDialog):
@@ -74,6 +75,27 @@ class ResultsDialog(QDialog):
         self.setLayout(self.layout)
 
 
+class FontbakeryRunner(QObject):
+    signalStatus = pyqtSignal(str)
+
+    def __init__(self, profilename, paths, parent=None):
+        super(self.__class__, self).__init__(parent)
+        self.paths = paths
+        self.profilename = profilename
+
+    @pyqtSlot()
+    def start(self):
+        profile = get_module_profile(
+            get_module("fontbakery.profiles." + self.profilename)
+        )
+        runner = CheckRunner(profile, values={"fonts": self.paths})
+        hr = HTMLReporter(runner=runner, loglevels=[INFO])
+        reporters = [hr.receive]
+        status_generator = runner.run()
+        distribute_generator(status_generator, reporters)
+        self.signalStatus.emit(hr.get_html())
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super(QWidget, self).__init__()
@@ -90,31 +112,18 @@ class MainWindow(QWidget):
         self.layout.addWidget(self.progress)
 
     def run_fontbakery(self, paths):
-        try:
-            self.progress.startAnimation()
-
-            # This job should ideally be run on a background thread...
-
-            profilename = self.checkwidget.currentText()
-            profile = get_module_profile(
-                get_module("fontbakery.profiles." + profilename)
-            )
-            runner = CheckRunner(
-                profile, values={"fonts": ["Mehr-Nastaliq-Web-version-1.0-beta.ttf"]}
-            )
-            hr = HTMLReporter(runner=runner, loglevels=[INFO])
-            reporters = [hr.receive]
-            status_generator = runner.run()
-            distribute_generator(status_generator, reporters)
-
-            self.show_html(hr.get_html())
-
-        except Exception as e:
-            raise
-        finally:
-            self.progress.stopAnimation()
+        self.progress.startAnimation()
+        # Setup the worker object and the worker_thread.
+        profilename = self.checkwidget.currentText()
+        self.worker = FontbakeryRunner(profilename, paths)
+        self.worker_thread = QThread()
+        self.worker.moveToThread(self.worker_thread)
+        self.worker_thread.started.connect(self.worker.start)
+        self.worker.signalStatus.connect(self.show_html)
+        self.worker_thread.start()
 
     def show_html(self, html):
+        self.progress.stopAnimation()
         ResultsDialog(html).exec_()
 
 
