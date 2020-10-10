@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QProgressBar,
 )
 from PyQt5.QtWebEngineWidgets import *
 import re
@@ -15,14 +16,29 @@ from fontbakery.checkrunner import (
     get_module_profile,
     CheckRunner,
     INFO,
+    START,
+    ENDCHECK,
     distribute_generator,
 )
 from fontbakery.commands.check_profile import get_module
-
+from fontbakery.reporters import FontbakeryReporter
 from fontbakery.reporters.html import HTMLReporter
-from qprogress import QProgressIndicator
 
 profiles = ["googlefonts", "adobefonts", "notofonts", "opentype"]
+
+
+class ProgressReporter(FontbakeryReporter):
+    def __init__(self, signal, is_async=False, runner=None):
+        self.signal = signal
+        super().__init__(is_async, runner)
+
+    def receive(self, event):
+        status, message, identity = event
+        if status == START:
+            self.count = len(message)
+        elif status == ENDCHECK:
+            self._tick += 1
+        self.signal.emit(100 * self._tick / float(self.count))
 
 
 class DragDropArea(QLabel):
@@ -77,6 +93,7 @@ class ResultsDialog(QDialog):
 
 class FontbakeryRunner(QObject):
     signalStatus = pyqtSignal(str)
+    progressStatus = pyqtSignal(float)
 
     def __init__(self, profilename, paths, parent=None):
         super(self.__class__, self).__init__(parent)
@@ -90,7 +107,8 @@ class FontbakeryRunner(QObject):
         )
         runner = CheckRunner(profile, values={"fonts": self.paths})
         hr = HTMLReporter(runner=runner, loglevels=[INFO])
-        reporters = [hr.receive]
+        prog = ProgressReporter(self.progressStatus, runner=runner)
+        reporters = [hr.receive, prog.receive]
         status_generator = runner.run()
         distribute_generator(status_generator, reporters)
         self.signalStatus.emit(hr.get_html())
@@ -108,11 +126,14 @@ class MainWindow(QWidget):
 
         self.layout.addWidget(self.checkwidget)
         self.layout.addWidget(DragDropArea(self))
-        self.progress = QProgressIndicator(self)
+        self.progress = QProgressBar(self)
+        self.progress.setMinimum(0)
+        self.progress.setMaximum(100)
+        self.progress.setValue(0)
         self.layout.addWidget(self.progress)
 
     def run_fontbakery(self, paths):
-        self.progress.startAnimation()
+        self.progress.setValue(0)
         # Setup the worker object and the worker_thread.
         profilename = self.checkwidget.currentText()
         self.worker = FontbakeryRunner(profilename, paths)
@@ -120,10 +141,13 @@ class MainWindow(QWidget):
         self.worker.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker.start)
         self.worker.signalStatus.connect(self.show_html)
+        self.worker.progressStatus.connect(self.update_progress)
         self.worker_thread.start()
 
+    def update_progress(self, value):
+        self.progress.setValue(value)
+
     def show_html(self, html):
-        self.progress.stopAnimation()
         ResultsDialog(html).exec_()
 
 
