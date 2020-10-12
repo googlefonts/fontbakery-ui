@@ -145,7 +145,7 @@ class MainWindow(QWidget):
         self.worker_thread.start()
 
     def update_progress(self, value):
-        self.progress.setValue(value)
+        self.progress.setValue(int(value))
 
     def show_html(self, html):
         self.worker_thread.quit()
