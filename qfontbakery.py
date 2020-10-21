@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QMessageBox,
     QProgressBar,
 )
 from PyQt5.QtWebEngineWidgets import *
@@ -23,8 +24,60 @@ from fontbakery.checkrunner import (
 from fontbakery.commands.check_profile import get_module
 from fontbakery.reporters import FontbakeryReporter
 from fontbakery.reporters.html import HTMLReporter
+import fontbakery
+import sys
+from pip._internal import main as pipmain
+import requests
+import json
+import os
+
 
 profiles = ["googlefonts", "adobefonts", "notofonts", "opentype"]
+url = 'https://api.github.com/repos/googlefonts/fontbakery/tags'
+tag_url = 'git+git://github.com/googlefonts/fontbakery.git@v'
+current = fontbakery.__version__
+is_py2app = hasattr(sys, "frozen")
+
+
+def needs_update():
+    try:
+        r = requests.get(url).content
+        info = json.loads(r)
+        latest = info[0]["name"][1:]
+        if current != latest:
+            return latest
+        return None
+    except Exception as e:
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Error getting latest fontbakery version: " + str(e))
+        msg.setWindowTitle("Fontbakery")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return (None, None)
+
+def update_dialog(ver):
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Information)
+    msg.setText(f'Version {ver} of fontbakery is available. You have {current}. Upgrade now?')
+    msg.setWindowTitle("Upgrade fontbakery?")
+    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+    msg.setDefaultButton(QMessageBox.Yes)
+    msg.buttonClicked.connect(lambda item: update_dialog_response(item, ver))
+    msg.exec_()
+
+def update_dialog_response(item, ver):
+    item.parent().parent().done(0)
+    if item.text() == "&No":
+        return
+    pipmain(["install", "--user", tag_url+ver]) # XXX
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Information)
+    msg.setText("Fontbakery has been upgraded. Please restart.")
+    msg.setWindowTitle("Fontbakery")
+    msg.setStandardButtons(QMessageBox.Ok)
+    msg.exec_()
+    sys.exit(1)
 
 
 class ProgressReporter(FontbakeryReporter):
@@ -157,4 +210,7 @@ my_app = QApplication(sys.argv)
 mainwindow = MainWindow()
 mainwindow.raise_()
 mainwindow.show()
+ver = needs_update()
+if ver:
+    update_dialog(ver)
 sys.exit(my_app.exec_())
