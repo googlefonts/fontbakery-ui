@@ -20,11 +20,6 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: 3.8
-    - name: Rebuild lxml from source
-      run: |
-        pip install --no-binary :all: lxml
-      env:
-        STATIC_DEPS: "true"
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -35,9 +30,20 @@ jobs:
       run: |
         rm -rf dist/FontBakery.app/Contents/Resources/lib/python3.8/PyQt5/Qt/lib/Qt{Designer,Quick}*
         rm -rf dist/FontBakery.app/Contents/Resources/lib/python3.8/PyQt5/Qt/qml/
+    - name: Codesign ots-sanitize
+      run : |
+        unzip dist/FontBakery.app/Contents/Resources/lib/python38.zip ots/ots-sanitize
+         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist ots/ots-sanitize
+         zip dist/FontBakery.app/Contents/Resources/lib/python38.zip ots/ots-sanitize
+    - name: Codesign ttfautohint
+      run : |
+        unzip dist/FontBakery.app/Contents/Resources/lib/python38.zip ttfautohint/libttfautohint.dylib
+         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist ttfautohint/libttfautohint.dylib
+         zip dist/FontBakery.app/Contents/Resources/lib/python38.zip ttfautohint/libttfautohint.dylib
     - name: Codesign package
       run: |
         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist -o runtime `find dist/FontBakery.app -name '*.so' -or -name '*.dylib' -or -name '*.framework'` || true
+        codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist -o runtime `find dist/FontBakery.app -type f | grep 'framework/Versions/5/'` || true
         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist -o runtime `find dist/FontBakery.app -type f | grep 'framework/Versions/5/'` || true
         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist -o runtime dist/FontBakery.app
     - name: Package app
