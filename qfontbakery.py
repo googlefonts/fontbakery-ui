@@ -164,7 +164,7 @@ class ResultsDialog(QDialog):
         if platform.system() in ["Darwin", "Windows"]:
             self.mdbutton = QPushButton("Copy Markdown to clipboard")
             self.mdbutton.clicked.connect(self.md_to_clipboard)
-        self.layout.addWidget(self.mdbutton)
+            self.layout.addWidget(self.mdbutton)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
 
@@ -208,7 +208,9 @@ class FontbakeryRunner(QObject):
         prog = ProgressReporter(self.progressStatus, runner=runner)
         reporters = [hr.receive, prog.receive, ghmd.receive]
         status_generator = runner.run()
+        print("Starting distribute_generator")
         distribute_generator(status_generator, reporters)
+        print("Done with distribute_generator")
         self.signalStatus.emit(hr.get_html(), ghmd.get_markdown())
 
 
