@@ -1,7 +1,11 @@
 name: Build application
 
-on: [push, release]
-
+on:
+  release:
+    types: [created]
+  push:
+    branches:
+      - master
 jobs:
   build:
 
