@@ -33,7 +33,7 @@ jobs:
       run: python3 setup.py py2app
     - name: Thin package
       run: |
-        rm -rf dist/FontBakery.app/Contents/Resources/lib/python3.8/PyQt5/Qt/lib/Qt{Designer,Quick}*
+        rm -rf dist/FontBakery.app/Contents/Resources/lib/python3.8/PyQt5/Qt/lib/Qt{Designer}*
         rm -rf dist/FontBakery.app/Contents/Resources/lib/python3.8/PyQt5/Qt/qml/
     - name: Codesign ots-sanitize
       run : |
