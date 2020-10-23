@@ -75,6 +75,7 @@ jobs:
         path: dist/FontBakery.zip
 
   release:
+    if: github.event_name == 'release'
     needs: build
     if: github.event_name == 'release'
     steps:
