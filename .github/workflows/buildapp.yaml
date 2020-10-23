@@ -88,5 +88,5 @@ jobs:
       with:
         upload_url: ${{ steps.get_release.outputs.upload_url }}
         asset_path: dist/FontBakery.zip
-        asset_name: FontBakery-OSX-${{steps.get_release.outputs.tag_name}.zip
+        asset_name: FontBakery-OSX-${{steps.get_release.outputs.tag_name}}.zip
         asset_content_type: application/octet-stream
