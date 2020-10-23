@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QMessageBox,
     QProgressBar,
+    QPushButton
 )
 from PyQt5.QtWebEngineWidgets import *
 import re
@@ -24,12 +25,28 @@ from fontbakery.checkrunner import (
 from fontbakery.commands.check_profile import get_module, log_levels
 from fontbakery.reporters import FontbakeryReporter
 from fontbakery.reporters.html import HTMLReporter
+from fontbakery.reporters.ghmarkdown import GHMarkdownReporter
 import fontbakery
+import subprocess
 import sys
+import platform
+
+if platform.system() == "Windows":
+    import win32clipboard
+
+print(sys.path)
+
+import site # Needed for py2app
 from pip._internal import main as pipmain
 import requests
 import json
 import os
+
+# Make hidden imports visible, for pyinstaller
+import fontbakery.profiles.googlefonts
+import fontbakery.profiles.adobefonts
+import fontbakery.profiles.notofonts
+import fontbakery.profiles.opentype
 
 
 profiles = ["googlefonts", "adobefonts", "notofonts", "opentype"]
@@ -37,6 +54,7 @@ url = 'https://api.github.com/repos/googlefonts/fontbakery/tags'
 tag_url = 'git+git://github.com/googlefonts/fontbakery.git@v'
 current = fontbakery.__version__
 is_py2app = hasattr(sys, "frozen")
+print(is_py2app)
 
 
 def needs_update():
@@ -44,6 +62,7 @@ def needs_update():
         r = requests.get(url).content
         info = json.loads(r)
         latest = info[0]["name"][1:]
+        print(f"Version {latest} of fontbakery is available. You have {current}")
         if current != latest:
             return latest
         return None
@@ -129,9 +148,10 @@ class DragDropArea(QLabel):
 
 
 class ResultsDialog(QDialog):
-    def __init__(self, html):
+    def __init__(self, html, markdown):
         super(ResultsDialog, self).__init__()
         self.setWindowTitle("FontBakery Results")
+        self.markdown = markdown
         QBtn = QDialogButtonBox.Ok
         self.buttonBox = QDialogButtonBox(QBtn)
         self.buttonBox.accepted.connect(self.accept)
@@ -140,12 +160,34 @@ class ResultsDialog(QDialog):
         self.webrenderer = QWebEngineView()
         self.webrenderer.setHtml(html)
         self.layout.addWidget(self.webrenderer)
+
+        if platform.system() in ["Darwin", "Windows"]:
+            self.mdbutton = QPushButton("Copy Markdown to clipboard")
+            self.mdbutton.clicked.connect(self.md_to_clipboard)
+        self.layout.addWidget(self.mdbutton)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
 
+    def md_to_clipboard(self):
+        if platform.system() == "Darwin":
+            self.setClipboardDataMac(self.markdown)
+        else:
+            self.setClipboardDataWin(self.markdown)
+        self.mdbutton.setText("Copied!")
+
+    def setClipboardDataWin(self, data):
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(win32clipboard.CF_TEXT, data)
+
+    def setClipboardDataMac(self, data):
+        p = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+        p.stdin.write(data.encode("utf-8"))
+        p.stdin.close()
+        retcode = p.wait()
+
 
 class FontbakeryRunner(QObject):
-    signalStatus = pyqtSignal(str)
+    signalStatus = pyqtSignal(str, str)
     progressStatus = pyqtSignal(float)
 
     def __init__(self, profilename, loglevels, paths, parent=None):
@@ -162,11 +204,12 @@ class FontbakeryRunner(QObject):
         runner = CheckRunner(profile, values={"fonts": self.paths})
         print("Log levels: ", self.loglevels)
         hr = HTMLReporter(runner=runner, loglevels=self.loglevels)
+        ghmd = GHMarkdownReporter(runner=runner, loglevels=self.loglevels)
         prog = ProgressReporter(self.progressStatus, runner=runner)
-        reporters = [hr.receive, prog.receive]
+        reporters = [hr.receive, prog.receive, ghmd.receive]
         status_generator = runner.run()
         distribute_generator(status_generator, reporters)
-        self.signalStatus.emit(hr.get_html())
+        self.signalStatus.emit(hr.get_html(), ghmd.get_markdown())
 
 
 class MainWindow(QWidget):
@@ -178,9 +221,7 @@ class MainWindow(QWidget):
         self.checkwidget = QComboBox()
         for p in profiles:
             self.checkwidget.addItem(p)
-
         self.layout.addWidget(self.checkwidget)
-        self.layout.addWidget(DragDropArea(self))
 
         self.layout.addWidget(QLabel("Choose level of output:"))
         self.loglevelwidget = QComboBox()
@@ -188,6 +229,9 @@ class MainWindow(QWidget):
             self.loglevelwidget.addItem(l)
         self.loglevelwidget.setCurrentText("INFO")
         self.layout.addWidget(self.loglevelwidget)
+
+        self.layout.addWidget(DragDropArea(self))
+
         self.progress = QProgressBar(self)
         self.progress.setMinimum(0)
         self.progress.setMaximum(100)
@@ -203,16 +247,16 @@ class MainWindow(QWidget):
         self.worker_thread = QThread()
         self.worker.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker.start)
-        self.worker.signalStatus.connect(self.show_html)
+        self.worker.signalStatus.connect(self.show_results)
         self.worker.progressStatus.connect(self.update_progress)
         self.worker_thread.start()
 
     def update_progress(self, value):
         self.progress.setValue(int(value))
 
-    def show_html(self, html):
+    def show_results(self, html, md):
         self.worker_thread.quit()
-        ResultsDialog(html).exec_()
+        ResultsDialog(html, md).exec_()
 
 
 # # start my_app
