@@ -10,11 +10,16 @@ from setuptools import setup
 APP = ['qfontbakery.py']
 DATA_FILES = []
 OPTIONS = {
-    'packages': ["PyQt5", "fontbakery.profiles"]
+		'iconfile': 'logo.icns',
+		'includes': ["site"],
+    'packages': ["PyQt5", "fontbakery.profiles"],
+'plist': {
+        'CFBundleIdentifier': 'uk.co.corvelsoftware.FontBakery',
+    }
 }
-
 setup(
     app=APP,
+    name="FontBakery",
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
     setup_requires=['py2app'],
