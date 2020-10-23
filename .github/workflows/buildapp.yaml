@@ -69,33 +69,24 @@ jobs:
         rm -rf dist/FontBakery.zip
         ditto -c -k --keepParent "dist/FontBakery.app" dist/FontBakery.zip
     - name: Archive production artifacts
+      if: github.event_name != 'release'
       uses: actions/upload-artifact@v2
       with:
-        name: FontBakery.zip
+        name: FontBakery-OSX.zip
         path: dist/FontBakery.zip
-
-  release:
-    if: github.event_name == 'release'
-    needs: build
-    if: github.event_name == 'release'
-    steps:
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+    - name: Get release
+      if: github.event_name == 'release'
+      id: get_release
+      uses: bruceadams/get-release@v1.2.2
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-    - name: Upload Release Asset
-      id: upload-release-asset
-      uses: actions/upload-release-asset@v1
+        GITHUB_TOKEN: ${{ github.token }}
+    - name: Upload release binary
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1.0.2
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ github.token }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        upload_url: ${{ steps.get_release.outputs.upload_url }}
         asset_path: dist/FontBakery.zip
-        asset_name: FontBakery.zip
-        asset_content_type: application/zip
+        asset_name: FontBakery-OSX-${{steps.get_release.outputs.tag_name}.zip
+        asset_content_type: application/octet-stream
