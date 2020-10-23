@@ -20,6 +20,11 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: 3.8
+    - name: Rebuild lxml from source
+      run: |
+        pip install --no-binary :all: lxml
+      env:
+        STATIC_DEPS: "true"
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -33,7 +38,7 @@ jobs:
     - name: Codesign ots-sanitize
       run : |
         unzip dist/FontBakery.app/Contents/Resources/lib/python38.zip ots/ots-sanitize
-         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist ots/ots-sanitize
+         codesign -s "Developer ID Application: Simon Cozens (GHYRZM4TBD)" -v --deep --timestamp --entitlements entitlements.plist --options runtime ots/ots-sanitize
          zip dist/FontBakery.app/Contents/Resources/lib/python38.zip ots/ots-sanitize
     - name: Codesign ttfautohint
       run : |
