@@ -1,0 +1,13 @@
+{
+	"notarize": [
+		{
+			"path": "dist/FontBakery.zip",
+			"bundle_id": "uk.co.corvelsoftware.fontbakery",
+			"staple": false
+		}
+	],
+
+	"apple_id": {
+		"username": "simon@simon-cozens.org"
+	}
+}
