@@ -21,7 +21,7 @@ from fontbakery.checkrunner import (
     ENDCHECK,
     distribute_generator,
 )
-from fontbakery.commands.check_profile import get_module
+from fontbakery.commands.check_profile import get_module, log_levels
 from fontbakery.reporters import FontbakeryReporter
 from fontbakery.reporters.html import HTMLReporter
 import fontbakery
@@ -148,10 +148,11 @@ class FontbakeryRunner(QObject):
     signalStatus = pyqtSignal(str)
     progressStatus = pyqtSignal(float)
 
-    def __init__(self, profilename, paths, parent=None):
+    def __init__(self, profilename, loglevels, paths, parent=None):
         super(self.__class__, self).__init__(parent)
         self.paths = paths
         self.profilename = profilename
+        self.loglevels = loglevels
 
     @pyqtSlot()
     def start(self):
@@ -159,7 +160,8 @@ class FontbakeryRunner(QObject):
             get_module("fontbakery.profiles." + self.profilename)
         )
         runner = CheckRunner(profile, values={"fonts": self.paths})
-        hr = HTMLReporter(runner=runner, loglevels=[INFO])
+        print("Log levels: ", self.loglevels)
+        hr = HTMLReporter(runner=runner, loglevels=self.loglevels)
         prog = ProgressReporter(self.progressStatus, runner=runner)
         reporters = [hr.receive, prog.receive]
         status_generator = runner.run()
@@ -179,6 +181,13 @@ class MainWindow(QWidget):
 
         self.layout.addWidget(self.checkwidget)
         self.layout.addWidget(DragDropArea(self))
+
+        self.layout.addWidget(QLabel("Choose level of output:"))
+        self.loglevelwidget = QComboBox()
+        for l in log_levels.keys():
+            self.loglevelwidget.addItem(l)
+        self.loglevelwidget.setCurrentText("INFO")
+        self.layout.addWidget(self.loglevelwidget)
         self.progress = QProgressBar(self)
         self.progress.setMinimum(0)
         self.progress.setMaximum(100)
@@ -189,7 +198,8 @@ class MainWindow(QWidget):
         self.progress.setValue(0)
         # Setup the worker object and the worker_thread.
         profilename = self.checkwidget.currentText()
-        self.worker = FontbakeryRunner(profilename, paths)
+        loglevel = log_levels[self.loglevelwidget.currentText()]
+        self.worker = FontbakeryRunner(profilename, [loglevel], paths)
         self.worker_thread = QThread()
         self.worker.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker.start)
