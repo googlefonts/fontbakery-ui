@@ -47,9 +47,10 @@ import fontbakery.profiles.googlefonts
 import fontbakery.profiles.adobefonts
 import fontbakery.profiles.notofonts
 import fontbakery.profiles.opentype
+import fontbakery.profiles.universal
 
 
-profiles = ["googlefonts", "adobefonts", "notofonts", "opentype"]
+profiles = ["googlefonts", "adobefonts", "notofonts", "opentype", "universal"]
 url = 'https://api.github.com/repos/googlefonts/fontbakery/tags'
 tag_url = 'git+git://github.com/googlefonts/fontbakery.git@v'
 current = fontbakery.__version__
