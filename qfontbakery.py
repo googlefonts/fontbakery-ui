@@ -30,9 +30,12 @@ import fontbakery
 import subprocess
 import sys
 import platform
+import os
 
 if platform.system() == "Windows":
     import win32clipboard
+
+os.environ["QT_MAC_WANTS_LAYER"] = 1
 
 print(sys.path)
 
