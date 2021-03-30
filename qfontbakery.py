@@ -10,7 +10,8 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QMessageBox,
     QProgressBar,
-    QPushButton
+    QPushButton,
+    QFileDialog
 )
 from PyQt5.QtWebEngineWidgets import *
 import re
@@ -148,7 +149,16 @@ class DragDropArea(QLabel):
         self.setStyleSheet("background-color: green ")
         paths = [url.toLocalFile() for url in event.mimeData().urls()]
         self.parent.run_fontbakery(paths)
+
+    def mousePressEvent(self, event):
+        file = QFileDialog.getOpenFileNames(
+            self, "Open font file(s)", filter="Font file (*.otf *.ttf *.ttc *.otc)"
+        )
+        if not file:
+            return
+        self.parent.run_fontbakery(file[0])
         event.accept()
+
 
 
 class ResultsDialog(QDialog):
