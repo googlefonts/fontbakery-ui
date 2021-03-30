@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,
     QWidget,
     QComboBox,
     QDialog,
@@ -43,15 +44,11 @@ import fontbakery.profiles.universal
 
 from fontbakery.cli import CLI_PROFILES
 
-class ResultsDialog(QDialog):
+class ResultsWidget(QWidget):
     def __init__(self, html, markdown):
-        super(ResultsDialog, self).__init__()
-        self.setWindowTitle("FontBakery Results")
+        super(ResultsWidget, self).__init__()
         self.markdown = markdown
         QBtn = QDialogButtonBox.Ok
-        self.buttonBox = QDialogButtonBox(QBtn)
-        self.buttonBox.accepted.connect(self.accept)
-
         self.layout = QVBoxLayout()
         self.webrenderer = QWebEngineView()
         self.webrenderer.setHtml(html)
@@ -61,7 +58,6 @@ class ResultsDialog(QDialog):
             self.mdbutton = QPushButton("Copy Markdown to clipboard")
             self.mdbutton.clicked.connect(self.md_to_clipboard)
             self.layout.addWidget(self.mdbutton)
-        self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
 
     def md_to_clipboard(self):
@@ -88,31 +84,38 @@ class MainWindow(QWidget):
         geometry = self.settings.value('mainwindowgeometry', '')
         if geometry:
             self.restoreGeometry(geometry)
-        self.layout = QVBoxLayout()
+        self.vlayout = QVBoxLayout()
+        self.layout = QHBoxLayout()
+        self.left = QWidget()
+        self.left.setLayout(self.vlayout)
+        self.right = QWidget()
+        self.layout.addWidget(self.left)
+        self.layout.addWidget(self.right)
         self.setLayout(self.layout)
-        self.layout.addWidget(QLabel("Choose profile to check:"))
+        self.vlayout.addWidget(QLabel("Choose profile to check:"))
         self.checkwidget = QComboBox()
         for p in CLI_PROFILES:
             self.checkwidget.addItem(p)
         last_used_profile = self.settings.value("last_used_profile", "")
         if last_used_profile:
             self.checkwidget.setCurrentText(last_used_profile)
-        self.layout.addWidget(self.checkwidget)
+        self.vlayout.addWidget(self.checkwidget)
 
-        self.layout.addWidget(QLabel("Choose level of output:"))
+        self.vlayout.addWidget(QLabel("Choose level of output:"))
         self.loglevelwidget = QComboBox()
         for l in log_levels.keys():
             self.loglevelwidget.addItem(l)
         self.loglevelwidget.setCurrentText("INFO")
-        self.layout.addWidget(self.loglevelwidget)
+        self.vlayout.addWidget(self.loglevelwidget)
 
-        self.layout.addWidget(DragDropArea(self))
+        self.vlayout.addWidget(DragDropArea(self))
 
         self.progress = QProgressBar(self)
         self.progress.setMinimum(0)
         self.progress.setMaximum(100)
         self.progress.setValue(0)
-        self.layout.addWidget(self.progress)
+        self.vlayout.addWidget(self.progress)
+        self.vlayout.addStretch()
 
     def run_fontbakery(self, paths):
         self.progress.setValue(0)
@@ -133,7 +136,10 @@ class MainWindow(QWidget):
 
     def show_results(self, html, md):
         self.worker_thread.quit()
-        ResultsDialog(html, md).exec_()
+        self.layout.removeWidget(self.right)
+        self.right.deleteLater()
+        self.right = ResultsWidget(html, md)
+        self.layout.addWidget(self.right)
 
     def closeEvent(self, event):
         geometry = self.saveGeometry()
