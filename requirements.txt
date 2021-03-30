@@ -1,4 +1,4 @@
 py2app
-fontbakery
+git+git://github.com/googlefonts/fontbakery@575147f#egg=fontbakery
 PyQt5
 PyQtWebEngine
