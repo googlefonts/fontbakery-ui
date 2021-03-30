@@ -1,5 +1,4 @@
 import sys
-from PyQt5.QtCore import *
 from PyQt5.QtWidgets import (
     QApplication,
     QLabel,
@@ -13,25 +12,14 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QFileDialog
 )
-from PyQt5.QtWebEngineWidgets import *
+from PyQt5.QtCore import QThread
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 import re
-from fontbakery.checkrunner import (
-    get_module_profile,
-    CheckRunner,
-    INFO,
-    START,
-    ENDCHECK,
-    distribute_generator,
-)
-from fontbakery.commands.check_profile import get_module, log_levels
-from fontbakery.reporters import FontbakeryReporter
-from fontbakery.reporters.html import HTMLReporter
-from fontbakery.reporters.ghmarkdown import GHMarkdownReporter
-import fontbakery
 import subprocess
 import sys
 import platform
 import os
+from fontbakery.commands.check_profile import log_levels
 
 if platform.system() == "Windows":
     import win32clipboard
@@ -41,10 +29,10 @@ os.environ["QT_MAC_WANTS_LAYER"] = "1"
 print(sys.path)
 
 import site # Needed for py2app
-from pip._internal import main as pipmain
-import requests
-import json
-import os
+
+from qfontbakery.selfupdate import needs_update, update_dialog
+from qfontbakery.dragdrop import DragDropArea
+from qfontbakery.fbinterface import FontbakeryRunner
 
 # Make hidden imports visible, for pyinstaller
 import fontbakery.profiles.googlefonts
@@ -53,113 +41,7 @@ import fontbakery.profiles.notofonts
 import fontbakery.profiles.opentype
 import fontbakery.profiles.universal
 
-
-profiles = ["googlefonts", "adobefonts", "notofonts", "opentype", "universal"]
-url = 'https://api.github.com/repos/googlefonts/fontbakery/tags'
-tag_url = 'git+git://github.com/googlefonts/fontbakery.git@v'
-current = fontbakery.__version__
-is_py2app = hasattr(sys, "frozen")
-print(is_py2app)
-
-
-def needs_update():
-    try:
-        r = requests.get(url).content
-        info = json.loads(r)
-        latest = info[0]["name"][1:]
-        print(f"Version {latest} of fontbakery is available. You have {current}")
-        if current != latest:
-            return latest
-        return None
-    except Exception as e:
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("Error getting latest fontbakery version: " + str(e))
-        msg.setWindowTitle("Fontbakery")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
-        return (None, None)
-
-def update_dialog(ver):
-    msg = QMessageBox()
-    msg.setIcon(QMessageBox.Information)
-    msg.setText(f'Version {ver} of fontbakery is available. You have {current}. Upgrade now?')
-    msg.setWindowTitle("Upgrade fontbakery?")
-    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-    msg.setDefaultButton(QMessageBox.Yes)
-    msg.buttonClicked.connect(lambda item: update_dialog_response(item, ver))
-    msg.exec_()
-
-def update_dialog_response(item, ver):
-    item.parent().parent().done(0)
-    if item.text() == "&No":
-        return
-    pipmain(["install", "--user", tag_url+ver]) # XXX
-    msg = QMessageBox()
-    msg.setIcon(QMessageBox.Information)
-    msg.setText("Fontbakery has been upgraded. Please restart.")
-    msg.setWindowTitle("Fontbakery")
-    msg.setStandardButtons(QMessageBox.Ok)
-    msg.exec_()
-    sys.exit(1)
-
-
-class ProgressReporter(FontbakeryReporter):
-    def __init__(self, signal, is_async=False, runner=None):
-        self.signal = signal
-        super().__init__(is_async, runner)
-
-    def receive(self, event):
-        status, message, identity = event
-        if status == START:
-            self.count = len(message)
-        elif status == ENDCHECK:
-            self._tick += 1
-        self.signal.emit(100 * self._tick / float(self.count))
-
-
-class DragDropArea(QLabel):
-    def __init__(self, parent):
-        super(DragDropArea, self).__init__()
-        self.parent = parent
-        self.setText("Drop a font here to test")
-        self.setStyleSheet("background-color: green ")
-        self.setMargin(10)
-        self.setAcceptDrops(True)
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls() and self.isAllFonts(event.mimeData()):
-            self.setStyleSheet("background-color: yellow ")
-            event.accept()
-        else:
-            self.setStyleSheet("background-color: red ")
-            event.ignore()
-
-    def isAllFonts(self, mime):
-        for url in mime.urls():
-            path = url.toLocalFile()
-            if not re.match(r".*\.(otf|ttf|ttc|otc)$", path):
-                return False
-        return True
-
-    def dragLeaveEvent(self, event):
-        self.setStyleSheet("background-color: green ")
-
-    def dropEvent(self, event):
-        self.setStyleSheet("background-color: green ")
-        paths = [url.toLocalFile() for url in event.mimeData().urls()]
-        self.parent.run_fontbakery(paths)
-
-    def mousePressEvent(self, event):
-        file = QFileDialog.getOpenFileNames(
-            self, "Open font file(s)", filter="Font file (*.otf *.ttf *.ttc *.otc)"
-        )
-        if not file:
-            return
-        self.parent.run_fontbakery(file[0])
-        event.accept()
-
-
+from fontbakery.cli import CLI_PROFILES
 
 class ResultsDialog(QDialog):
     def __init__(self, html, markdown):
@@ -199,35 +81,6 @@ class ResultsDialog(QDialog):
         p.stdin.close()
         retcode = p.wait()
 
-
-class FontbakeryRunner(QObject):
-    signalStatus = pyqtSignal(str, str)
-    progressStatus = pyqtSignal(float)
-
-    def __init__(self, profilename, loglevels, paths, parent=None):
-        super(self.__class__, self).__init__(parent)
-        self.paths = paths
-        self.profilename = profilename
-        self.loglevels = loglevels
-
-    @pyqtSlot()
-    def start(self):
-        profile = get_module_profile(
-            get_module("fontbakery.profiles." + self.profilename)
-        )
-        runner = CheckRunner(profile, values={"fonts": self.paths})
-        print("Log levels: ", self.loglevels)
-        hr = HTMLReporter(runner=runner, loglevels=self.loglevels)
-        ghmd = GHMarkdownReporter(runner=runner, loglevels=self.loglevels)
-        prog = ProgressReporter(self.progressStatus, runner=runner)
-        reporters = [hr.receive, prog.receive, ghmd.receive]
-        status_generator = runner.run()
-        print("Starting distribute_generator")
-        distribute_generator(status_generator, reporters)
-        print("Done with distribute_generator")
-        self.signalStatus.emit(hr.get_html(), ghmd.get_markdown())
-
-
 class MainWindow(QWidget):
     def __init__(self):
         super(QWidget, self).__init__()
@@ -235,7 +88,7 @@ class MainWindow(QWidget):
         self.setLayout(self.layout)
         self.layout.addWidget(QLabel("Choose profile to check:"))
         self.checkwidget = QComboBox()
-        for p in profiles:
+        for p in CLI_PROFILES:
             self.checkwidget.addItem(p)
         self.layout.addWidget(self.checkwidget)
 
