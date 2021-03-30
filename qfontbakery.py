@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QFileDialog
 )
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QThread, QSettings
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 import re
 import subprocess
@@ -84,12 +84,19 @@ class ResultsDialog(QDialog):
 class MainWindow(QWidget):
     def __init__(self):
         super(QWidget, self).__init__()
+        self.settings = QSettings()
+        geometry = self.settings.value('mainwindowgeometry', '')
+        if geometry:
+            self.restoreGeometry(geometry)
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(QLabel("Choose profile to check:"))
         self.checkwidget = QComboBox()
         for p in CLI_PROFILES:
             self.checkwidget.addItem(p)
+        last_used_profile = self.settings.value("last_used_profile", "")
+        if last_used_profile:
+            self.checkwidget.setCurrentText(last_used_profile)
         self.layout.addWidget(self.checkwidget)
 
         self.layout.addWidget(QLabel("Choose level of output:"))
@@ -112,6 +119,7 @@ class MainWindow(QWidget):
         # Setup the worker object and the worker_thread.
         profilename = self.checkwidget.currentText()
         loglevel = log_levels[self.loglevelwidget.currentText()]
+        self.settings.setValue('last_used_profile', profilename)
         self.worker = FontbakeryRunner(profilename, [loglevel], paths)
         self.worker_thread = QThread()
         self.worker.moveToThread(self.worker_thread)
@@ -127,9 +135,16 @@ class MainWindow(QWidget):
         self.worker_thread.quit()
         ResultsDialog(html, md).exec_()
 
+    def closeEvent(self, event):
+        geometry = self.saveGeometry()
+        self.settings.setValue('mainwindowgeometry', geometry)
+
 
 # # start my_app
 my_app = QApplication(sys.argv)
+my_app.setApplicationName("FontBakery")
+my_app.setOrganizationDomain("fonts.google.com")
+
 mainwindow = MainWindow()
 mainwindow.raise_()
 mainwindow.show()
