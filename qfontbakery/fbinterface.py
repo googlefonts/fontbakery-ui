@@ -30,21 +30,23 @@ class FontbakeryRunner(QObject):
     signalStatus = pyqtSignal(str, str)
     progressStatus = pyqtSignal(float)
 
-    def __init__(self, profilename, loglevels, paths, parent=None):
+    def __init__(self, profilename, loglevels, paths, checks=None, parent=None):
         super(self.__class__, self).__init__(parent)
         self.paths = paths
         self.profilename = profilename
         self.loglevels = loglevels
+        self.checks = checks
 
     @pyqtSlot()
     def start(self):
         profile = get_module_profile(
             get_module("fontbakery.profiles." + self.profilename)
         )
+        print(self.checks)
         runner = CheckRunner(profile, values={"fonts": self.paths},
             config={
                 "custom_order": None,
-                "explicit_checks": None,
+                "explicit_checks": self.checks,
                 "exclude_checks": None
             }
         )

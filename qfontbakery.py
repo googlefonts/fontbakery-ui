@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QFileDialog
 )
-from PyQt5.QtCore import QThread, QSettings
+from PyQt5.QtCore import QThread, QSettings, Qt
+from PyQt5.QtGui import QFont
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 import re
 import subprocess
@@ -21,6 +22,8 @@ import sys
 import platform
 import os
 from fontbakery.commands.check_profile import log_levels
+from fontbakery.profile import get_module_profile
+from importlib import import_module
 
 if platform.system() == "Windows":
     import win32clipboard
@@ -43,6 +46,38 @@ import fontbakery.profiles.opentype
 import fontbakery.profiles.universal
 
 from fontbakery.cli import CLI_PROFILES
+
+class CheckCombo(QComboBox):
+    def __init__(self, profile):
+        super().__init__()
+        imported = import_module("fontbakery.profiles."+profile)
+        profile = get_module_profile(imported)
+        self.setMaxVisibleItems(10)
+        self.setStyleSheet("combobox-popup: 0;")
+        self.profile = profile
+        for _, section in profile._sections.items():
+            self.addItem(section.name)
+            item = self.model().item(self.count()-1,0)
+            font = QFont()
+            font.setBold(True)
+            item.setFont(font)
+            item.setFlags(item.flags() &  ~Qt.ItemIsSelectable)
+            item.setCheckState(Qt.Unchecked)
+
+            for check in section._checks:
+                self.addItem(check.description,userData = check.id)
+                item = self.model().item(self.count()-1,0)
+                item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                item.setCheckState(Qt.Checked)
+
+    def checked_checks(self):
+        rv = []
+        for i in range(0, self.count()):
+            item = self.model().item(i)
+            if item.checkState() != Qt.Checked or not self.itemData(i):
+                continue
+            rv.append(self.itemData(i))
+        return rv
 
 class ResultsWidget(QWidget):
     def __init__(self, html, markdown):
@@ -93,12 +128,18 @@ class MainWindow(QWidget):
         self.layout.addWidget(self.right)
         self.setLayout(self.layout)
         self.vlayout.addWidget(QLabel("Choose profile to check:"))
-        self.checkwidget = QComboBox()
+        self.profilewidget = QComboBox()
         for p in CLI_PROFILES:
-            self.checkwidget.addItem(p)
+            self.profilewidget.addItem(p)
         last_used_profile = self.settings.value("last_used_profile", "")
         if last_used_profile:
-            self.checkwidget.setCurrentText(last_used_profile)
+            self.profilewidget.setCurrentText(last_used_profile)
+        self.vlayout.addWidget(self.profilewidget)
+
+        self.profilewidget.currentIndexChanged.connect(self.profile_changed)
+
+        self.vlayout.addWidget(QLabel("Choose checks to run:"))
+        self.checkwidget = CheckCombo(self.profilewidget.currentText())
         self.vlayout.addWidget(self.checkwidget)
 
         self.vlayout.addWidget(QLabel("Choose level of output:"))
@@ -120,10 +161,11 @@ class MainWindow(QWidget):
     def run_fontbakery(self, paths):
         self.progress.setValue(0)
         # Setup the worker object and the worker_thread.
-        profilename = self.checkwidget.currentText()
+        profilename = self.profilewidget.currentText()
         loglevel = log_levels[self.loglevelwidget.currentText()]
         self.settings.setValue('last_used_profile', profilename)
-        self.worker = FontbakeryRunner(profilename, [loglevel], paths)
+        print("checked_checks", self.checkwidget.checked_checks())
+        self.worker = FontbakeryRunner(profilename, [loglevel], paths, checks=self.checkwidget.checked_checks())
         self.worker_thread = QThread()
         self.worker.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker.start)
@@ -140,6 +182,13 @@ class MainWindow(QWidget):
         self.right.deleteLater()
         self.right = ResultsWidget(html, md)
         self.layout.addWidget(self.right)
+
+    def profile_changed(self):
+        index = self.vlayout.indexOf(self.checkwidget)
+        self.vlayout.removeWidget(self.checkwidget)
+        self.checkwidget.deleteLater()
+        self.checkwidget = CheckCombo(self.profilewidget.currentText())
+        self.vlayout.insertWidget(index, self.checkwidget)
 
     def closeEvent(self, event):
         geometry = self.saveGeometry()
