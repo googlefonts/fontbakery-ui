@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import QLabel, QFileDialog
+import re
 
 
 class DragDropArea(QLabel):
