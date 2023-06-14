@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QFileDialog
 )
-from PyQt5.QtCore import QThread, QSettings, Qt
+from PyQt5.QtCore import QThread, QSettings, Qt, QSize
 from PyQt5.QtGui import QFont
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 import re
@@ -69,6 +69,7 @@ class CheckCombo(QComboBox):
                 item = self.model().item(self.count()-1,0)
                 item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                 item.setCheckState(Qt.Checked)
+        self.adjustSize()
 
     def checked_checks(self):
         rv = []
@@ -79,6 +80,13 @@ class CheckCombo(QComboBox):
             rv.append(self.itemData(i))
         return rv
 
+    def sizeHint(self):
+        return self.minimumSizeHint()
+
+    def minimumSizeHint(self):
+        return QSize(50, super().minimumSizeHint().height())
+
+
 class ResultsWidget(QWidget):
     def __init__(self, html, markdown):
         super(ResultsWidget, self).__init__()
@@ -88,6 +96,7 @@ class ResultsWidget(QWidget):
         self.webrenderer = QWebEngineView()
         self.webrenderer.setHtml(html)
         self.layout.addWidget(self.webrenderer)
+        self.setMinimumHeight(400)
 
         if platform.system() in ["Darwin", "Windows"]:
             self.mdbutton = QPushButton("Copy Markdown to clipboard")
@@ -120,7 +129,7 @@ class MainWindow(QWidget):
         if geometry:
             self.restoreGeometry(geometry)
         self.vlayout = QVBoxLayout()
-        self.layout = QHBoxLayout()
+        self.layout = QVBoxLayout()
         self.left = QWidget()
         self.left.setLayout(self.vlayout)
         self.right = QWidget()
@@ -202,6 +211,8 @@ my_app.setOrganizationDomain("fonts.google.com")
 
 mainwindow = MainWindow()
 mainwindow.raise_()
+mainwindow.adjustSize()
+mainwindow.setMinimumWidth(400)
 mainwindow.show()
 ver = needs_update()
 if ver:
